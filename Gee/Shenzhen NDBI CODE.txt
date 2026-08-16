@@ -1,0 +1,260 @@
+var area = ee.FeatureCollection("projects/practice-1-503311/assets/Shenzhen");
+
+function clippedimg(img){
+  return img.clip(area)
+};
+var s2 = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2')
+.filterBounds(area)
+.filterDate('2000-01-01','2000-12-31')
+.filter(ee.Filter.lt('CLOUD_COVER', 40))
+.sort('CLOUD_COVER')
+.median()
+s2 = clippedimg(s2)
+
+Map.addLayer(s2, {
+  bands: ['SR_B3','SR_B2','SR_B1'],
+  min: 7000,
+  max: 15000
+}, 'True Color_2000')
+
+Map.centerObject(area, 10);
+
+var s3 = ee.ImageCollection('LANDSAT/LT05/C02/T1_L2')
+.filterBounds(area)
+.filterDate('2005-01-01','2005-12-31')
+.filter(ee.Filter.lt('CLOUD_COVER', 40))
+.sort('CLOUD_COVER')
+.median()
+s3 = clippedimg(s3)
+
+Map.addLayer(s3, {
+  bands: ['SR_B3','SR_B2','SR_B1'],
+  min: 7000,
+  max: 15000
+}, 'True Color_2005')
+
+Map.centerObject(area, 10)
+
+var s5= ee.ImageCollection('LANDSAT/LC08/C02/T1_L2')
+.filterBounds(area)
+.filterDate('2015-01-01','2015-12-31')
+.filter(ee.Filter.lt('CLOUD_COVER', 40))
+.sort('CLOUD_COVER')
+.median()
+s5 = clippedimg(s5)
+
+Map.addLayer(s5, {
+  bands: ['SR_B4','SR_B3','SR_B2'],
+  min: 5000,
+  max: 15000
+}, 'True Color_2010')
+
+Map.centerObject(area, 10)
+var ndbi_s2 = s2.normalizedDifference(['SR_B5','SR_B4']).rename('NDBI')
+Map.addLayer(ndbi_s2, {
+  min: -0.5,
+  max: 0.5,
+  palette: ['black', 'orange', 'white']
+}, 'NDBI_2000')
+var ndbi_s3 = s3.normalizedDifference(['SR_B5','SR_B4']).rename('NDBI')
+Map.addLayer(ndbi_s3, {
+  min: -0.5,
+  max: 0.5,
+  palette: ['black', 'orange', 'white']
+}, 'NDBI_2005')
+var ndbi_s5 = s5.normalizedDifference(['SR_B6','SR_B5']).rename('NDBI')
+Map.addLayer(ndbi_s5, {
+  min: -0.5,
+  max: 0.5,
+  palette: ['black', 'orange', 'white']
+}, 'NDBI_2015')
+
+Export.image.toDrive({
+  image: s2.select(['SR_B4', 'SR_B3', 'SR_B2']),
+  description:'True_Color_2000',
+   folder: 'GEE_Projects',
+  fileNamePrefix: 'True_Color',
+  region: area,
+   scale: 20,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+Export.image.toDrive({
+  image: s3.select(['SR_B4', 'SR_B3', 'SR_B2']),
+  description:'True_Color_2005',
+   folder: 'GEE_Projects',
+  fileNamePrefix: 'True_Color',
+  region: area,
+   scale: 20,
+  crs: 'EPSG:4326',
+  maxPixels: 1e13
+});
+Export.image.toDrive({
+  image: s5.select(['SR_B4', 'SR_B3', 'SR_B2']),
+  description:'True_Color_2015',
+   folder: 'GEE_Projects',
+  fileNamePrefix: 'True_Color',
+  region: area,
+  crs: 'EPSG:4326',
+  scale: 20,
+  maxPixels: 1e13
+    });
+    
+  Export.image.toDrive({
+image: ndbi_s2,
+description: 'NDBI_2000',
+folder: 'GEE_Projects',
+fileNamePrefix: 'NDBI_2000',
+region: area,
+scale: 30,
+maxPixels: 1e13
+})
+
+ Export.image.toDrive({
+image: ndbi_s3,
+description: 'NDBI_2005',
+folder: 'GEE_Projects',
+  fileNamePrefix: 'NDBI_2005',
+  region: area,
+scale: 30,
+maxPixels: 1e13
+})
+
+Export.image.toDrive({
+image: ndbi_s5,
+description: 'NDBI_2015',
+folder: 'GEE_Projects',
+  fileNamePrefix: 'NDBI_2015',
+  region: area,
+scale: 30,
+maxPixels: 1e13
+})
+var ndbiChange = ndbi_s5.subtract(ndbi_s2)
+  .rename('NDBI_Change');
+
+Map.addLayer(ndbiChange, {
+  min: -0.5,
+  max: 0.5,
+  palette: ['blue', 'white', 'red']
+}, 'NDBI Change 2000-2015');
+Export.image.toDrive({
+  image:ndbiChange,
+  description: 'NDBI_CHANGE',
+  folder: 'GEE Projects',
+   fileNamePrefix: 'NDBI_2015',
+  region: area,
+scale: 30,
+maxPixels: 1e13
+})
+
+var builtup2000 = ndbi_s2.gt(0.2);
+var builtup2005 = ndbi_s3.gt(0.2);
+var builtup2015 = ndbi_s5.gt(0.2);
+
+Map.addLayer(builtup2000.selfMask(), {
+  palette: ['red']
+}, 'Built-up 2000');
+
+Map.addLayer(builtup2005.selfMask(), {
+  palette: ['red']
+}, 'Built-up 2005');
+
+Map.addLayer(builtup2015.selfMask(), {
+  palette: ['red']
+}, 'Built-up 2015');
+
+print('NDBI 2015 histogram', 
+  ndbi_s5.reduceRegion({
+    reducer: ee.Reducer.histogram(),
+    geometry: area,
+    scale: 30,
+    maxPixels: 1e13
+  })
+);
+print('NDBI 2015 statistics', ndbi_s5.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: area,
+  scale: 30,
+  maxPixels: 1e13
+}));
+
+var pixelArea = ee.Image.pixelArea()
+var builtupArea2000 = ee.Image.pixelArea()
+  .updateMask(builtup2000)
+  .reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: area,
+    scale: 30,
+    maxPixels: 1e13
+  })
+  .get('area');
+
+var builtupKm2000 = ee.Number(builtupArea2000)
+  .divide(1000000);
+
+print('Built-up area 2000 (km²)', builtupKm2000);
+
+print('Built-up area 2000 (km²)', builtupKm2000);
+
+var builtupArea2005 = ee.Image.pixelArea()
+  .updateMask(builtup2005)
+  .reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: area,
+    scale: 30,
+    maxPixels: 1e13
+  })
+  .get('area');
+
+var builtupKm2005 = ee.Number(builtupArea2005)
+  .divide(1000000);
+
+print('Built-up area 2005 (km²)', builtupKm2005);
+
+print('NDBI 2015 statistics', ndbi_s5.reduceRegion({
+  reducer: ee.Reducer.minMax(),
+  geometry: area,
+  scale: 30,
+  maxPixels: 1e13
+}));
+
+var builtupArea2015 = ee.Image.pixelArea()
+  .updateMask(builtup2015)
+  .reduceRegion({
+    reducer: ee.Reducer.sum(),
+    geometry: area,
+    scale: 30,
+    maxPixels: 1e13
+  })
+  .get('area');
+
+var builtupKm2015 = ee.Number(builtupArea2015)
+  .divide(1000000);
+
+print('Built-up area 2015 (km²)', builtupKm2015);
+var percentageChange = builtupKm2015
+  .subtract(builtupKm2000)
+  .divide(builtupKm2000)
+  .multiply(100);
+
+print('Built-up area percentage change 2000-2015:', 
+  percentageChange);
+  
+  var urbanHotspots = ndbiChange.gt(0.17);
+  
+  Map.addLayer(
+  urbanHotspots.selfMask().clip(area),
+  {
+    palette: ['red']
+  },
+  'Urban Expansion Hotspots'
+);
+Export.image.toDrive({
+  image:urbanHotspots,
+  description: 'Urban_Hotspot',
+  folder: 'GEE Projects',
+   fileNamePrefix: 'Hotspot',
+  region: area,
+scale: 30,
+maxPixels: 1e13
+})
